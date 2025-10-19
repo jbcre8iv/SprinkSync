@@ -1,0 +1,280 @@
+# SprinkSync - Cursor AI Rules
+
+## Project Overview
+
+This is **SprinkSync** - a smart sprinkler controller system that adds WiFi capabilities to existing Rain Bird sprinkler systems.
+
+**Branding:** Always use "SprinkSync" (capital S, capital S, no spaces)
+**Tagline:** "Smart watering, perfectly synced"
+
+## Project Context
+
+- **Target Hardware:** Raspberry Pi 5 (4GB RAM)
+- **Sprinkler System:** Rain Bird (no native WiFi)
+- **Hardware Interface:** 8-channel 5V relay module controlling 24V AC sprinkler valves
+- **User:** Self-taught programmer leveraging AI for code development
+
+## Tech Stack
+
+### Backend (Node.js)
+- **Runtime:** Node.js 20 LTS
+- **Framework:** Express.js
+- **Database:** SQLite3
+- **Scheduling:** node-cron
+- **Hardware Control:** onoff (GPIO library)
+- **Development:** nodemon for hot reloading
+
+### Frontend (React)
+- **Framework:** React 18
+- **Build Tool:** Vite
+- **Styling:** TailwindCSS (utility classes only)
+- **HTTP Client:** Axios
+- **Routing:** React Router (when needed)
+
+### Mobile (Future)
+- React Native for iOS
+- Not in current scope
+
+## Code Style & Preferences
+
+### General
+- Use clear, descriptive variable names
+- Add comments for complex logic
+- Prefer readability over clever code
+- Include error handling for all async operations
+
+### JavaScript/Node.js
+- Use modern ES6+ syntax (async/await, arrow functions, destructuring)
+- Prefer `const` over `let`, never use `var`
+- Use template literals for strings
+- Always use try/catch for async operations
+- Use meaningful function names that describe what they do
+
+### React
+- Use functional components with hooks
+- Prefer named exports for components
+- Keep components small and focused (under 200 lines)
+- Use custom hooks for reusable logic
+- Avoid inline functions in JSX (define them above return statement)
+
+### TailwindCSS
+- **CRITICAL:** Only use core Tailwind utility classes (no custom classes that require compilation)
+- We don't have access to a Tailwind compiler beyond basic utilities
+- Stick to: padding, margin, colors, flex, grid, text sizes, borders, shadows
+- Avoid: arbitrary values like `w-[347px]` unless absolutely necessary
+
+### API Design
+- RESTful endpoints following conventions:
+  - GET for reading data
+  - POST for creating
+  - PUT for updating
+  - DELETE for removing
+- Always return consistent JSON responses
+- Include proper HTTP status codes
+- Handle errors gracefully with descriptive messages
+
+## Project Architecture
+
+### Backend Structure
+```
+backend/
+├── src/
+│   ├── index.js              # Express app entry point
+│   ├── config/
+│   │   └── database.js       # SQLite setup and initialization
+│   ├── controllers/
+│   │   ├── zones.js          # Zone business logic
+│   │   ├── schedules.js      # Schedule management logic
+│   │   └── system.js         # System status logic
+│   ├── hardware/
+│   │   ├── gpio.js           # Real GPIO control (Pi only)
+│   │   └── mock-gpio.js      # Mock GPIO for development
+│   ├── routes/
+│   │   ├── zones.js          # Zone API routes
+│   │   ├── schedules.js      # Schedule API routes
+│   │   ├── history.js        # History API routes
+│   │   └── system.js         # System API routes
+│   ├── services/
+│   │   ├── scheduler.js      # Cron job manager
+│   │   └── logger.js         # Logging service
+│   └── utils/
+│       └── validation.js     # Input validation helpers
+```
+
+### Frontend Structure
+```
+web-dashboard/
+├── src/
+│   ├── App.jsx               # Main app component
+│   ├── main.jsx             # Entry point
+│   ├── api/
+│   │   └── client.js        # Axios API client setup
+│   ├── components/
+│   │   ├── ZoneCard.jsx     # Individual zone display
+│   │   ├── ScheduleList.jsx # Schedule list component
+│   │   ├── HistoryTimeline.jsx # History display
+│   │   └── Modal.jsx        # Reusable modal component
+│   ├── pages/
+│   │   ├── Dashboard.jsx    # Main dashboard view
+│   │   ├── Schedules.jsx    # Schedule management view
+│   │   ├── History.jsx      # History view
+│   │   └── Settings.jsx     # System settings view
+│   └── utils/
+│       └── helpers.js       # Utility functions
+```
+
+## Development Workflow
+
+### Mock vs Real Hardware
+- During development, use `GPIO_MODE=mock` in .env
+- Mock GPIO allows full system testing without Raspberry Pi
+- Switch to `GPIO_MODE=real` only when deploying to Pi
+
+### Testing Without Hardware
+1. Run backend with mock GPIO
+2. Test all API endpoints work correctly
+3. Build and test frontend interface
+4. Verify scheduling logic works
+5. Only after everything works, deploy to Pi with real GPIO
+
+## Key Implementation Details
+
+### GPIO Pin Mapping
+```javascript
+const GPIO_PINS = {
+  1: 17,  // Zone 1 → GPIO 17
+  2: 27,  // Zone 2 → GPIO 27
+  3: 22,  // Zone 3 → GPIO 22
+  4: 23,  // Zone 4 → GPIO 23
+  5: 24,  // Zone 5 → GPIO 24
+  6: 25,  // Zone 6 → GPIO 25
+  7: 5,   // Zone 7 → GPIO 5
+  8: 6    // Zone 8 → GPIO 6
+};
+```
+
+### Database Schema
+- `zones` table: id, name, gpio_pin, default_duration, total_runtime, last_run
+- `schedules` table: id, zone_id, start_time, duration, days, enabled
+- `history` table: id, zone_id, start_time, end_time, duration, trigger, schedule_id
+
+### Safety Features Required
+1. All relays OFF on startup
+2. Maximum runtime per zone: 60 minutes
+3. Auto-stop if process crashes
+4. GPIO cleanup on shutdown
+5. Prevent concurrent zone limit (max 2 zones at once)
+
+## API Base URL
+- Development: `http://localhost:3000/api`
+- Production (Pi): `http://<raspberry-pi-ip>:3000/api`
+
+## Environment Variables
+```
+NODE_ENV=development|production
+PORT=3000
+DATABASE_PATH=./database/sprinkSync.db
+GPIO_MODE=mock|real
+LOG_LEVEL=info|debug|error
+APP_NAME=SprinkSync
+```
+
+## Common Tasks
+
+### When Creating API Endpoints
+1. Define route in appropriate route file
+2. Implement business logic in controller
+3. Add input validation
+4. Include try/catch error handling
+5. Return consistent JSON format
+6. Test with mock data first
+
+### When Creating React Components
+1. Keep components focused and small
+2. Extract reusable logic to custom hooks
+3. Use TailwindCSS utility classes for styling
+4. Handle loading and error states
+5. Add PropTypes or TypeScript types if needed
+6. Test component renders correctly
+
+### When Working with Database
+1. Always use parameterized queries (prevent SQL injection)
+2. Handle connection errors gracefully
+3. Close connections properly
+4. Use transactions for multiple operations
+5. Add indexes for frequently queried columns
+
+## Important Reminders
+
+### For AI Assistant
+- User is not a professional coder, so explain decisions clearly
+- Provide complete, working code (no placeholders or TODOs)
+- Include error handling in all code
+- Test code mentally before suggesting it
+- Explain any complex patterns or libraries used
+- Default to simpler, more readable solutions
+
+### Critical Don'ts
+- ❌ Don't use localStorage or sessionStorage (not supported in React artifacts)
+- ❌ Don't use HTML `<form>` tags in React (blocked in iframe)
+- ❌ Don't use Tailwind classes that require compilation beyond basics
+- ❌ Don't assume GPIO is available (check GPIO_MODE first)
+- ❌ Don't forget error handling in async operations
+- ❌ Don't use `var` - always use `const` or `let`
+
+### Critical Do's
+- ✅ Always use mock GPIO during development
+- ✅ Test API endpoints before building frontend features
+- ✅ Include loading states in UI
+- ✅ Add user-friendly error messages
+- ✅ Use environment variables for configuration
+- ✅ Keep code DRY (Don't Repeat Yourself)
+- ✅ Comment complex logic
+- ✅ Use meaningful variable and function names
+
+## Documentation References
+
+- Full specification available in `SPECIFICATION.md`
+- README for quick start: `README.md`
+- All API endpoints documented in specification Section 2
+- UI wireframes in specification Section 4
+- Hardware details in specification Section 5
+
+## Current Development Phase
+
+**Phase 1: Backend Foundation** (Current)
+- Express server setup
+- SQLite database initialization
+- Mock GPIO controller
+- All API endpoints
+- Schedule execution engine
+- Error handling and logging
+
+**Next: Phase 2 - Web Dashboard**
+- React setup
+- Component development
+- API integration
+- Real-time updates
+
+## Support & Help
+
+When stuck:
+1. Check SPECIFICATION.md for detailed requirements
+2. Review existing code patterns in the project
+3. Test with mock GPIO first
+4. Ask for clarification on requirements
+5. Break complex problems into smaller steps
+
+## Project Goals
+
+**Primary:** Create a reliable, easy-to-use smart sprinkler controller
+**Secondary:** Learn full-stack development through practical project
+**Success Criteria:** 
+- All 8 zones controllable via web interface
+- Schedules run automatically and reliably
+- System is stable and doesn't crash
+- Code is maintainable and well-documented
+
+---
+
+**Remember:** This project is about learning and building something practical. Take time to understand the code, not just copy it. Ask questions when something is unclear!

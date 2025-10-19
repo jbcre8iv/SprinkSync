@@ -1,0 +1,35 @@
+{
+  "name": "sprinksync-backend",
+  "version": "1.0.0",
+  "description": "SprinkSync Smart Sprinkler Controller - Backend API",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Tests coming soon\" && exit 0"
+  },
+  "keywords": [
+    "sprinkler",
+    "irrigation",
+    "raspberry-pi",
+    "gpio",
+    "automation"
+  ],
+  "author": "SprinkSync",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3",
+    "onoff": "^6.0.3",
+    "sqlite3": "^5.1.7",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
