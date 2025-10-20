@@ -78,6 +78,24 @@ export const stopAllZones = async () => {
   return response.data;
 };
 
+/**
+ * Initialize system with zone configuration
+ */
+export const initializeSystem = async (zoneCount) => {
+  const response = await apiClient.post('/zones/initialize', {
+    zone_count: zoneCount
+  });
+  return response.data;
+};
+
+/**
+ * Reset system (delete all zones)
+ */
+export const resetSystem = async () => {
+  const response = await apiClient.post('/zones/reset');
+  return response.data;
+};
+
 // ========== SCHEDULES API ==========
 
 /**
@@ -161,6 +179,118 @@ export const getSystemStatus = async () => {
  */
 export const getHealth = async () => {
   const response = await apiClient.get('/system/health');
+  return response.data;
+};
+
+// ========== SETTINGS API (v2.0) ==========
+
+/**
+ * Get system settings
+ */
+export const getSettings = async () => {
+  const response = await apiClient.get('/settings');
+  return response.data;
+};
+
+/**
+ * Update system settings
+ */
+export const updateSettings = async (data) => {
+  const response = await apiClient.put('/settings', data);
+  return response.data;
+};
+
+/**
+ * Get all use case profiles
+ */
+export const getUseCaseProfiles = async () => {
+  const response = await apiClient.get('/settings/profiles');
+  return response.data;
+};
+
+/**
+ * Get specific profile details
+ */
+export const getProfileDetails = async (profileId) => {
+  const response = await apiClient.get(`/settings/profiles/${profileId}`);
+  return response.data;
+};
+
+/**
+ * Get all Rain Bird controller models
+ */
+export const getControllerModels = async () => {
+  const response = await apiClient.get('/settings/controllers');
+  return response.data;
+};
+
+/**
+ * Get specific controller details
+ */
+export const getControllerDetails = async (controllerId) => {
+  const response = await apiClient.get(`/settings/controllers/${controllerId}`);
+  return response.data;
+};
+
+// ========== WEATHER API (v2.0) ==========
+
+/**
+ * Get weather forecast
+ */
+export const getWeather = async (forceRefresh = false) => {
+  const response = await apiClient.get('/weather', {
+    params: { refresh: forceRefresh }
+  });
+  return response.data;
+};
+
+/**
+ * Check if zone should skip due to weather
+ */
+export const checkShouldSkip = async (zoneId) => {
+  const response = await apiClient.get(`/weather/should-skip/${zoneId}`);
+  return response.data;
+};
+
+// ========== ANALYTICS API (v2.0) ==========
+
+/**
+ * Get analytics data
+ */
+export const getAnalytics = async (days = 30, zoneId = null) => {
+  const response = await apiClient.get('/analytics', {
+    params: { days, zoneId }
+  });
+  return response.data;
+};
+
+/**
+ * Get summary statistics
+ */
+export const getSummaryStats = async (days = 30) => {
+  const response = await apiClient.get('/analytics/summary', {
+    params: { days }
+  });
+  return response.data;
+};
+
+/**
+ * Get insights and recommendations
+ */
+export const getInsights = async (days = 30) => {
+  const response = await apiClient.get('/analytics/insights', {
+    params: { days }
+  });
+  return response.data;
+};
+
+/**
+ * Get chart data for visualization
+ */
+export const getChartData = async (days = 30, metric = 'gallons') => {
+  const response = await apiClient.get('/analytics/chart', {
+    params: { days, metric }
+  });
   return response.data;
 };
 

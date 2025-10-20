@@ -99,8 +99,12 @@ const startZoneManaged = async (zoneId, duration, trigger = TRIGGER_TYPES.MANUAL
       throw new Error('Zone is already running');
     }
 
-    if (getRunningZoneCount() >= SAFETY.MAX_CONCURRENT_ZONES) {
-      throw new Error(`Maximum ${SAFETY.MAX_CONCURRENT_ZONES} zones can run concurrently`);
+    // Get max concurrent zones from settings (fallback to constant)
+    const settings = await getOne('SELECT max_concurrent_zones FROM system_settings WHERE id = 1');
+    const maxConcurrentZones = settings ? settings.max_concurrent_zones : SAFETY.MAX_CONCURRENT_ZONES;
+
+    if (getRunningZoneCount() >= maxConcurrentZones) {
+      throw new Error(`Maximum ${maxConcurrentZones} zones can run concurrently`);
     }
 
     if (duration < SAFETY.MIN_DURATION_MINUTES || duration > SAFETY.MAX_RUNTIME_MINUTES) {

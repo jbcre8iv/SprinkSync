@@ -8,6 +8,7 @@ const { getRunningZones } = require('../services/zone-manager');
 const { getActiveScheduleCount } = require('../services/scheduler');
 const { GPIO_MODE } = require('../hardware/gpio');
 const { HTTP_STATUS } = require('../config/constants');
+const { getOne } = require('../config/database');
 
 // Track server start time
 const serverStartTime = Date.now();
@@ -19,6 +20,10 @@ const getSystemStatus = async (req, res, next) => {
   try {
     const uptime = Math.floor((Date.now() - serverStartTime) / 1000); // seconds
     const runningZones = getRunningZones();
+
+    // Get actual zone count from database
+    const zoneCountResult = await getOne('SELECT COUNT(*) as count FROM zones');
+    const totalZones = zoneCountResult ? zoneCountResult.count : 0;
 
     // Memory usage
     const memUsage = process.memoryUsage();
@@ -34,7 +39,7 @@ const getSystemStatus = async (req, res, next) => {
       uptime: uptime,
       gpio_mode: GPIO_MODE,
       active_zones: runningZones.length,
-      total_zones: 8,
+      total_zones: totalZones,
       database_status: 'connected',
       scheduler_status: 'running',
       active_schedules: getActiveScheduleCount(),

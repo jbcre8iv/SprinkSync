@@ -1,0 +1,17 @@
+{
+  "name": "sprinksync",
+  "version": "2.0.0",
+  "description": "Smart sprinkler controller with use-case profiles and weather intelligence",
+  "scripts": {
+    "start": "node scripts/start.js",
+    "backend": "cd backend && node src/index.js",
+    "dashboard": "cd web-dashboard && npm run dev",
+    "ios": "cd ios-app && npm start"
+  },
+  "keywords": ["irrigation", "sprinkler", "smart-home", "raspberry-pi"],
+  "author": "Justin Bush",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

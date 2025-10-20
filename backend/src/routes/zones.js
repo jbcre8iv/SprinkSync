@@ -12,11 +12,22 @@ const {
   updateZone,
   startZone,
   stopZone,
-  stopAllZones
+  stopAllZones,
+  initializeSystem,
+  resetSystem
 } = require('../controllers/zones');
 
 // GET /api/zones - Get all zones
 router.get('/', getAllZones);
+
+// POST /api/zones/initialize - Initialize system with zone configuration
+router.post('/initialize', initializeSystem);
+
+// POST /api/zones/reset - Reset system (delete all zones)
+router.post('/reset', resetSystem);
+
+// POST /api/zones/stop-all - Stop all zones
+router.post('/stop-all', stopAllZones);
 
 // GET /api/zones/:id - Get single zone
 router.get('/:id', getZoneById);
@@ -29,8 +40,5 @@ router.post('/:id/start', startZone);
 
 // POST /api/zones/:id/stop - Stop zone
 router.post('/:id/stop', stopZone);
-
-// POST /api/zones/stop-all - Stop all zones
-router.post('/stop-all', stopAllZones);
 
 module.exports = router;

@@ -19,8 +19,8 @@ const validateZoneId = (zoneId) => {
     return { valid: false, error: 'Zone ID must be a number' };
   }
 
-  if (id < 1 || id > 8) {
-    return { valid: false, error: 'Zone ID must be between 1 and 8' };
+  if (id < 1) {
+    return { valid: false, error: 'Zone ID must be a positive integer' };
   }
 
   return { valid: true, value: id };

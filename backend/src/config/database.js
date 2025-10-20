@@ -125,38 +125,138 @@ const initializeDatabase = () => {
         CREATE INDEX IF NOT EXISTS idx_history_trigger ON history(trigger)
       `);
 
-      // Insert default zone data if zones table is empty
-      db.get('SELECT COUNT(*) as count FROM zones', [], (err, row) => {
+      // Create system_settings table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS system_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          use_case_profile TEXT NOT NULL DEFAULT 'residential_lawn',
+          location_lat REAL,
+          location_lon REAL,
+          location_zip TEXT,
+          location_city TEXT,
+          water_rate_per_gallon REAL DEFAULT 0.01,
+          currency TEXT DEFAULT 'USD',
+          weather_enabled INTEGER DEFAULT 1,
+          weather_api_key TEXT,
+          smart_skip_enabled INTEGER DEFAULT 1,
+          rain_threshold REAL DEFAULT 0.25,
+          max_concurrent_zones INTEGER DEFAULT 2,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `, (err) => {
         if (err) {
-          console.error('❌ Error checking zones:', err.message);
+          console.error('❌ Error creating system_settings table:', err.message);
+          return reject(err);
+        }
+        console.log('✅ System settings table ready');
+      });
+
+      // Create weather_cache table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS weather_cache (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          forecast_date DATE NOT NULL,
+          temp_high REAL,
+          temp_low REAL,
+          precipitation REAL,
+          precipitation_prob INTEGER,
+          humidity INTEGER,
+          wind_speed REAL,
+          conditions TEXT,
+          et_rate REAL,
+          fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating weather_cache table:', err.message);
+          return reject(err);
+        }
+        console.log('✅ Weather cache table ready');
+      });
+
+      // Create index on forecast_date
+      db.run(`
+        CREATE INDEX IF NOT EXISTS idx_weather_forecast_date ON weather_cache(forecast_date)
+      `);
+
+      // Create zone_profiles table (for zone-specific settings)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS zone_profiles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          zone_id INTEGER NOT NULL,
+          crop_type TEXT,
+          soil_type TEXT,
+          sun_exposure TEXT,
+          moisture_target INTEGER,
+          notes TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (zone_id) REFERENCES zones(id) ON DELETE CASCADE
+        )
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating zone_profiles table:', err.message);
+          return reject(err);
+        }
+        console.log('✅ Zone profiles table ready');
+      });
+
+      // Create analytics table (for tracking water usage and costs)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS analytics (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date DATE NOT NULL,
+          zone_id INTEGER,
+          total_runtime INTEGER NOT NULL DEFAULT 0,
+          total_gallons REAL NOT NULL DEFAULT 0,
+          total_cost REAL NOT NULL DEFAULT 0,
+          manual_runs INTEGER DEFAULT 0,
+          scheduled_runs INTEGER DEFAULT 0,
+          weather_skips INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (zone_id) REFERENCES zones(id) ON DELETE CASCADE
+        )
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating analytics table:', err.message);
+          return reject(err);
+        }
+        console.log('✅ Analytics table ready');
+      });
+
+      // Create indexes for analytics
+      db.run(`
+        CREATE INDEX IF NOT EXISTS idx_analytics_date ON analytics(date)
+      `);
+      db.run(`
+        CREATE INDEX IF NOT EXISTS idx_analytics_zone_id ON analytics(zone_id)
+      `);
+
+      // Insert default system settings if not exists
+      db.run(`
+        INSERT OR IGNORE INTO system_settings (id, use_case_profile)
+        VALUES (1, 'residential_lawn')
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating default settings:', err.message);
           return reject(err);
         }
 
-        if (row.count === 0) {
-          console.log('📝 Inserting default zone data...');
-
-          const stmt = db.prepare(`
-            INSERT INTO zones (id, name, gpio_pin, default_duration)
-            VALUES (?, ?, ?, ?)
-          `);
-
-          // Insert all 8 zones
-          for (let i = 1; i <= 8; i++) {
-            stmt.run(i, `${DEFAULTS.ZONE_NAME_PREFIX} ${i}`, GPIO_PINS[i], DEFAULTS.ZONE_DURATION);
+        // Check zone count
+        db.get('SELECT COUNT(*) as count FROM zones', [], (err, row) => {
+          if (err) {
+            console.error('❌ Error checking zones:', err.message);
+            return reject(err);
           }
 
-          stmt.finalize((err) => {
-            if (err) {
-              console.error('❌ Error inserting default zones:', err.message);
-              return reject(err);
-            }
-            console.log('✅ Default zones created (1-8)');
-            resolve();
-          });
-        } else {
-          console.log(`✅ Database initialized (${row.count} zones found)`);
+          if (row.count === 0) {
+            console.log('📝 No zones configured. Use /api/zones/initialize to set up your system.');
+          } else {
+            console.log(`✅ Database initialized (${row.count} zones found)`);
+          }
           resolve();
-        }
+        });
       });
     });
   });

@@ -8,6 +8,7 @@ const { getAll, getOne, runQuery } = require('../config/database');
 const { startZoneManaged, stopZoneManaged, stopAllZonesManaged, getZoneState } = require('../services/zone-manager');
 const { validateZoneId, validateDuration, validateZoneName } = require('../utils/validation');
 const { HTTP_STATUS } = require('../config/constants');
+const { getZoneConfig, isValidZoneCount, VALID_ZONE_COUNTS } = require('../config/zoneConfigs');
 
 /**
  * Get all zones with current status
@@ -224,11 +225,113 @@ const stopAllZones = async (req, res, next) => {
   }
 };
 
+/**
+ * Initialize system with predefined zone configuration
+ */
+const initializeSystem = async (req, res, next) => {
+  try {
+    const { zone_count } = req.body;
+
+    // Validate zone count
+    if (!zone_count) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        error: 'zone_count is required',
+        valid_options: VALID_ZONE_COUNTS
+      });
+    }
+
+    const zoneCount = parseInt(zone_count);
+    if (!isValidZoneCount(zoneCount)) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        error: `Invalid zone count. Must be one of: ${VALID_ZONE_COUNTS.join(', ')}`,
+        valid_options: VALID_ZONE_COUNTS
+      });
+    }
+
+    // Check if system already has zones
+    const existingZones = await getAll('SELECT id FROM zones');
+    if (existingZones.length > 0) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        error: 'System already configured. Use reset endpoint to reconfigure.',
+        existing_zone_count: existingZones.length
+      });
+    }
+
+    // Get zone configuration
+    const config = getZoneConfig(zoneCount);
+    const now = new Date().toISOString();
+
+    // Create all zones
+    const createdZones = [];
+    for (const zoneConfig of config.zones) {
+      await runQuery(
+        `INSERT INTO zones (id, name, gpio_pin, default_duration, total_runtime, created_at, updated_at)
+         VALUES (?, ?, ?, 15, 0, ?, ?)`,
+        [zoneConfig.id, zoneConfig.name, zoneConfig.gpio_pin, now, now]
+      );
+
+      const zone = await getOne('SELECT * FROM zones WHERE id = ?', [zoneConfig.id]);
+      createdZones.push({
+        ...zone,
+        is_running: false,
+        remaining_time: 0
+      });
+    }
+
+    res.status(HTTP_STATUS.CREATED).json({
+      message: `${config.name} initialized successfully`,
+      zone_count: zoneCount,
+      config_name: config.name,
+      zones: createdZones
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Reset system (delete all zones and schedules)
+ */
+const resetSystem = async (req, res, next) => {
+  try {
+    // Check for running zones
+    const zones = await getAll('SELECT * FROM zones');
+    const runningZones = zones.filter(z => getZoneState(z.id).is_running);
+
+    if (runningZones.length > 0) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        error: 'Cannot reset system while zones are running. Stop all zones first.',
+        running_zones: runningZones.map(z => ({ id: z.id, name: z.name }))
+      });
+    }
+
+    // Get counts for response
+    const zoneCount = zones.length;
+    const schedules = await getAll('SELECT id FROM schedules');
+    const scheduleCount = schedules.length;
+
+    // Delete all zones (CASCADE will delete schedules)
+    await runQuery('DELETE FROM zones');
+
+    res.json({
+      message: 'System reset successfully',
+      zones_deleted: zoneCount,
+      schedules_deleted: scheduleCount
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAllZones,
   getZoneById,
   updateZone,
   startZone,
   stopZone,
-  stopAllZones
+  stopAllZones,
+  initializeSystem,
+  resetSystem
 };

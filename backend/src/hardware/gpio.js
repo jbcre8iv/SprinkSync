@@ -8,7 +8,8 @@
  * the GPIO_MODE environment variable.
  */
 
-const { GPIO_PINS, RELAY, SAFETY } = require('../config/constants');
+const { RELAY, SAFETY } = require('../config/constants');
+const { getAll } = require('../config/database');
 
 // Determine which GPIO implementation to use
 const GPIO_MODE = process.env.GPIO_MODE || 'mock';
@@ -37,13 +38,25 @@ const runningZones = new Map();
 /**
  * Initialize all GPIO pins
  * Sets all zones to OFF state (relays open, valves closed)
+ * Loads zones dynamically from database to ensure sync
  */
 const initializeGPIO = async () => {
   console.log('🚀 Initializing GPIO pins...');
 
   try {
-    // Initialize each zone's GPIO pin
-    for (const [zoneId, pin] of Object.entries(GPIO_PINS)) {
+    // Load zones from database
+    const zones = await getAll('SELECT id, gpio_pin FROM zones ORDER BY id');
+
+    if (!zones || zones.length === 0) {
+      console.log('⚠️  No zones found in database. GPIO not initialized.');
+      return;
+    }
+
+    // Initialize each zone's GPIO pin based on database
+    for (const zone of zones) {
+      const zoneId = zone.id;
+      const pin = zone.gpio_pin;
+
       gpioPins[zoneId] = new Gpio(pin, 'out');
       gpioPins[zoneId].writeSync(RELAY.OFF); // Start with relay OFF
     }
@@ -51,7 +64,7 @@ const initializeGPIO = async () => {
     // Wait for relay stabilization
     await new Promise(resolve => setTimeout(resolve, SAFETY.GPIO_STABILIZATION_MS));
 
-    console.log('✅ All GPIO pins initialized (all zones OFF)');
+    console.log(`✅ All GPIO pins initialized (all zones OFF)`);
   } catch (error) {
     console.error('❌ Error initializing GPIO:', error.message);
     throw error;
@@ -60,7 +73,7 @@ const initializeGPIO = async () => {
 
 /**
  * Start a zone (open valve)
- * @param {number} zoneId - Zone ID (1-8)
+ * @param {number} zoneId - Zone ID
  * @returns {Promise<void>}
  */
 const startZone = async (zoneId) => {
@@ -70,7 +83,7 @@ const startZone = async (zoneId) => {
     }
 
     gpioPins[zoneId].writeSync(RELAY.ON); // Turn relay ON (valve opens)
-    console.log(`✅ Zone ${zoneId} started (GPIO ${GPIO_PINS[zoneId]} → LOW)`);
+    console.log(`✅ Zone ${zoneId} started (valve opened)`);
   } catch (error) {
     console.error(`❌ Error starting zone ${zoneId}:`, error.message);
     throw error;
@@ -79,7 +92,7 @@ const startZone = async (zoneId) => {
 
 /**
  * Stop a zone (close valve)
- * @param {number} zoneId - Zone ID (1-8)
+ * @param {number} zoneId - Zone ID
  * @returns {Promise<void>}
  */
 const stopZone = async (zoneId) => {
@@ -89,7 +102,7 @@ const stopZone = async (zoneId) => {
     }
 
     gpioPins[zoneId].writeSync(RELAY.OFF); // Turn relay OFF (valve closes)
-    console.log(`✅ Zone ${zoneId} stopped (GPIO ${GPIO_PINS[zoneId]} → HIGH)`);
+    console.log(`✅ Zone ${zoneId} stopped (valve closed)`);
   } catch (error) {
     console.error(`❌ Error stopping zone ${zoneId}:`, error.message);
     throw error;
@@ -104,7 +117,7 @@ const stopAllZones = async () => {
   console.log('🛑 Stopping all zones...');
 
   try {
-    for (const zoneId of Object.keys(GPIO_PINS)) {
+    for (const zoneId of Object.keys(gpioPins)) {
       if (gpioPins[zoneId]) {
         gpioPins[zoneId].writeSync(RELAY.OFF);
       }
@@ -144,7 +157,7 @@ const cleanupGPIO = async () => {
     await new Promise(resolve => setTimeout(resolve, 100));
 
     // Unexport all pins
-    for (const zoneId of Object.keys(GPIO_PINS)) {
+    for (const zoneId of Object.keys(gpioPins)) {
       if (gpioPins[zoneId]) {
         gpioPins[zoneId].unexport();
       }

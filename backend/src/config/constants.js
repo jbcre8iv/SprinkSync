@@ -5,7 +5,7 @@
  * GPIO pin mappings, safety limits, and configuration values.
  */
 
-// GPIO Pin Mapping for 8 zones
+// GPIO Pin Mapping for up to 12 zones
 // Maps zone ID to Raspberry Pi GPIO pin number
 const GPIO_PINS = {
   1: 17,  // Zone 1 → GPIO 17 (Physical Pin 11)
@@ -15,7 +15,11 @@ const GPIO_PINS = {
   5: 24,  // Zone 5 → GPIO 24 (Physical Pin 18)
   6: 25,  // Zone 6 → GPIO 25 (Physical Pin 22)
   7: 5,   // Zone 7 → GPIO 5  (Physical Pin 29)
-  8: 6    // Zone 8 → GPIO 6  (Physical Pin 31)
+  8: 6,   // Zone 8 → GPIO 6  (Physical Pin 31)
+  9: 12,  // Zone 9 → GPIO 12 (Physical Pin 32)
+  10: 13, // Zone 10 → GPIO 13 (Physical Pin 33)
+  11: 16, // Zone 11 → GPIO 16 (Physical Pin 36)
+  12: 19  // Zone 12 → GPIO 19 (Physical Pin 35)
 };
 
 // Safety Limits
