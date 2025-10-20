@@ -14,7 +14,9 @@ import {
   getUseCaseProfiles,
   getProfileDetails,
   getControllerModels,
-  getControllerDetails
+  getControllerDetails,
+  getDevModeStatus,
+  toggleDevMode
 } from '../api/client';
 import { formatDuration } from '../utils/helpers';
 
@@ -29,6 +31,8 @@ const Settings = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [devMode, setDevMode] = useState(false);
+  const [isTogglingDevMode, setIsTogglingDevMode] = useState(false);
 
   // Form state
   const [useCaseProfile, setUseCaseProfile] = useState('');
@@ -50,17 +54,19 @@ const Settings = () => {
 
   const fetchData = async () => {
     try {
-      const [statusData, settingsData, profilesData, controllersData] = await Promise.all([
+      const [statusData, settingsData, profilesData, controllersData, devModeData] = await Promise.all([
         getSystemStatus(),
         getSettings(),
         getUseCaseProfiles(),
-        getControllerModels()
+        getControllerModels(),
+        getDevModeStatus()
       ]);
 
       setStatus(statusData);
       setSettings(settingsData.settings);
       setProfiles(profilesData.profiles);
       setControllers(controllersData.controllers);
+      setDevMode(devModeData.dev_mode || false);
 
       // Populate form with current settings
       const s = settingsData.settings;
@@ -129,6 +135,27 @@ const Settings = () => {
   const handleFieldChange = (setter) => (value) => {
     setter(value);
     setHasUnsavedChanges(true);
+  };
+
+  const handleDevModeToggle = async () => {
+    setIsTogglingDevMode(true);
+    try {
+      const newDevMode = !devMode;
+      const response = await toggleDevMode(newDevMode);
+      setDevMode(newDevMode);
+
+      // Refresh all data after toggling dev mode
+      setTimeout(async () => {
+        await fetchData();
+        window.location.reload(); // Reload to show/hide sample data across all pages
+      }, 1000);
+
+    } catch (error) {
+      console.error('Failed to toggle dev mode:', error);
+      alert('Failed to toggle dev mode. Please try again.');
+    } finally {
+      setIsTogglingDevMode(false);
+    }
   };
 
   const handleSave = async () => {
@@ -564,6 +591,56 @@ const Settings = () => {
                 <span className="text-gray-600">Auto-shutoff</span>
                 <span className="font-medium text-success">Enabled</span>
               </div>
+            </div>
+          </div>
+
+          {/* Developer Tools */}
+          <div className={`card border-2 ${devMode ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white'}`}>
+            <h2 className="text-lg font-semibold mb-4 text-gray-900">🛠️ Dev Mode</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-sm">Enable Dev Mode</p>
+                  <p className="text-xs text-gray-500">Load sample data for testing</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={devMode}
+                    onChange={handleDevModeToggle}
+                    disabled={isTogglingDevMode}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
+              </div>
+
+              {devMode && (
+                <div className="pt-3 border-t border-purple-200">
+                  <div className="bg-purple-100 border border-purple-300 rounded-md p-3">
+                    <p className="text-xs font-semibold text-purple-900 mb-2">📊 Sample Data Loaded:</p>
+                    <ul className="text-xs text-purple-800 space-y-1">
+                      <li>✓ 4 Active schedules</li>
+                      <li>✓ 60 History entries (30 days)</li>
+                      <li>✓ Analytics data (30 days)</li>
+                      <li>✓ Weather forecast (7 days)</li>
+                      <li>✓ Sample zone group</li>
+                    </ul>
+                  </div>
+                  <p className="text-xs text-purple-700 mt-2 text-center">
+                    Perfect for demos and testing
+                  </p>
+                </div>
+              )}
+
+              {isTogglingDevMode && (
+                <div className="text-center">
+                  <LoadingSpinner size="small" />
+                  <p className="text-xs text-gray-500 mt-2">
+                    {devMode ? 'Clearing sample data...' : 'Loading sample data...'}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

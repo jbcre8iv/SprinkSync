@@ -182,6 +182,22 @@ export const getHealth = async () => {
   return response.data;
 };
 
+/**
+ * Get dev mode status
+ */
+export const getDevModeStatus = async () => {
+  const response = await apiClient.get('/system/dev-mode');
+  return response.data;
+};
+
+/**
+ * Toggle dev mode
+ */
+export const toggleDevMode = async (enabled) => {
+  const response = await apiClient.post('/system/dev-mode', { enabled });
+  return response.data;
+};
+
 // ========== SETTINGS API (v2.0) ==========
 
 /**

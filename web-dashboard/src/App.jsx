@@ -5,12 +5,29 @@
  */
 
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import Dashboard from './pages/Dashboard';
 import Schedules from './pages/Schedules';
 import History from './pages/History';
 import Settings from './pages/Settings';
+import { getDevModeStatus } from './api/client';
 
 function App() {
+  const [devMode, setDevMode] = useState(false);
+
+  useEffect(() => {
+    // Check dev mode status on mount
+    const checkDevMode = async () => {
+      try {
+        const data = await getDevModeStatus();
+        setDevMode(data.dev_mode || false);
+      } catch (error) {
+        console.error('Failed to fetch dev mode status:', error);
+      }
+    };
+    checkDevMode();
+  }, []);
+
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-gray-50">
@@ -19,11 +36,16 @@ function App() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
               {/* Logo */}
-              <div className="flex items-center">
+              <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-primary">SprinkSync</h1>
-                <span className="ml-3 text-sm text-gray-500 hidden sm:block">
+                <span className="text-sm text-gray-500 hidden sm:block">
                   Smart watering, perfectly synced
                 </span>
+                {devMode && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-300">
+                    🛠️ Dev Mode
+                  </span>
+                )}
               </div>
 
               {/* Navigation */}
