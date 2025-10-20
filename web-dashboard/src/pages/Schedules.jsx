@@ -11,6 +11,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import {
   getAllSchedules,
   getAllZones,
+  getAllGroups,
   createSchedule,
   updateSchedule,
   deleteSchedule,
@@ -22,13 +23,16 @@ import { formatTime12Hour, formatDays, formatNextRun, DAY_NAMES } from '../utils
 const Schedules = () => {
   const [schedules, setSchedules] = useState([]);
   const [zones, setZones] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
 
   // Form state
   const [formData, setFormData] = useState({
-    zone_id: 1,
+    schedule_type: 'zone', // 'zone' or 'group'
+    zone_id: null,
+    group_id: null,
     start_time: '06:00',
     duration: 15,
     days: [],
@@ -37,12 +41,14 @@ const Schedules = () => {
 
   const fetchData = async () => {
     try {
-      const [schedulesData, zonesData] = await Promise.all([
+      const [schedulesData, zonesData, groupsData] = await Promise.all([
         getAllSchedules(),
         getAllZones(),
+        getAllGroups(),
       ]);
       setSchedules(schedulesData);
       setZones(zonesData);
+      setGroups(groupsData.groups || []);
       setIsLoading(false);
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -59,7 +65,21 @@ const Schedules = () => {
     }
 
     try {
-      await createSchedule(formData);
+      // Build payload based on schedule type
+      const payload = {
+        start_time: formData.start_time,
+        duration: formData.duration,
+        days: formData.days,
+        enabled: formData.enabled,
+      };
+
+      if (formData.schedule_type === 'zone') {
+        payload.zone_id = formData.zone_id;
+      } else {
+        payload.group_id = formData.group_id;
+      }
+
+      await createSchedule(payload);
       setShowCreateModal(false);
       resetForm();
       await fetchData();
@@ -70,7 +90,15 @@ const Schedules = () => {
 
   const handleUpdate = async () => {
     try {
-      await updateSchedule(editingSchedule.id, formData);
+      // Build payload based on schedule type (for updates, only send fields that are being updated)
+      const payload = {
+        start_time: formData.start_time,
+        duration: formData.duration,
+        days: formData.days,
+        enabled: formData.enabled,
+      };
+
+      await updateSchedule(editingSchedule.id, payload);
       setEditingSchedule(null);
       resetForm();
       await fetchData();
@@ -102,7 +130,9 @@ const Schedules = () => {
   const openEditModal = (schedule) => {
     setEditingSchedule(schedule);
     setFormData({
-      zone_id: schedule.zone_id,
+      schedule_type: schedule.schedule_type || (schedule.zone_id ? 'zone' : 'group'),
+      zone_id: schedule.zone_id || null,
+      group_id: schedule.group_id || null,
       start_time: schedule.start_time,
       duration: schedule.duration,
       days: schedule.days,
@@ -112,7 +142,9 @@ const Schedules = () => {
 
   const resetForm = () => {
     setFormData({
-      zone_id: 1,
+      schedule_type: 'zone',
+      zone_id: zones.length > 0 ? zones[0].id : null,
+      group_id: groups.length > 0 ? groups[0].id : null,
       start_time: '06:00',
       duration: 15,
       days: [],
@@ -168,7 +200,12 @@ const Schedules = () => {
                       }`}
                     ></div>
                   </button>
-                  <h3 className="text-lg font-semibold">{schedule.zone_name}</h3>
+                  <h3 className="text-lg font-semibold">
+                    {schedule.target_name || schedule.zone_name || schedule.group_name}
+                    {schedule.schedule_type === 'group' && (
+                      <span className="ml-2 text-xs text-gray-500">(Group)</span>
+                    )}
+                  </h3>
                 </div>
 
                 <div className="flex flex-wrap gap-4 text-sm text-gray-600">
@@ -255,21 +292,82 @@ const Schedules = () => {
         }
       >
         <div className="space-y-4">
-          {/* Zone Selection */}
+          {/* Schedule Type Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Zone</label>
-            <select
-              value={formData.zone_id}
-              onChange={(e) => setFormData({ ...formData, zone_id: parseInt(e.target.value) })}
-              className="input w-full"
-            >
-              {zones.map((zone) => (
-                <option key={zone.id} value={zone.id}>
-                  {zone.name}
-                </option>
-              ))}
-            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Schedule Type</label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  value="zone"
+                  checked={formData.schedule_type === 'zone'}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    schedule_type: e.target.value,
+                    zone_id: zones.length > 0 ? zones[0].id : null
+                  })}
+                  className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
+                />
+                <span className="text-sm">Single Zone</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  value="group"
+                  checked={formData.schedule_type === 'group'}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    schedule_type: e.target.value,
+                    group_id: groups.length > 0 ? groups[0].id : null
+                  })}
+                  className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
+                />
+                <span className="text-sm">Zone Group</span>
+              </label>
+            </div>
           </div>
+
+          {/* Zone Selection (conditional) */}
+          {formData.schedule_type === 'zone' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Zone</label>
+              <select
+                value={formData.zone_id || ''}
+                onChange={(e) => setFormData({ ...formData, zone_id: parseInt(e.target.value) })}
+                className="input w-full"
+              >
+                {zones.map((zone) => (
+                  <option key={zone.id} value={zone.id}>
+                    {zone.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Group Selection (conditional) */}
+          {formData.schedule_type === 'group' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Zone Group</label>
+              {groups.length > 0 ? (
+                <select
+                  value={formData.group_id || ''}
+                  onChange={(e) => setFormData({ ...formData, group_id: parseInt(e.target.value) })}
+                  className="input w-full"
+                >
+                  {groups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.icon} {group.name} ({group.zone_count} zones)
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-gray-500 italic">
+                  No groups available. Create a group first from the Dashboard.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Start Time */}
           <div>

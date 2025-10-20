@@ -18,6 +18,10 @@ const logger = require('./logger');
 // Format: { zoneId: { startTime, duration, timeout, historyId, trigger, scheduleId } }
 const runningZones = new Map();
 
+// In-memory state for queued zones (part of a running group)
+// Format: { zoneId: { groupId, groupName, position, totalInGroup, scheduledStartMs } }
+const queuedZones = new Map();
+
 /**
  * Check if zone is currently running
  * @param {number} zoneId - Zone ID
@@ -82,6 +86,56 @@ const getZoneState = (zoneId) => {
     start_time: data.startTime,
     duration: data.duration
   };
+};
+
+/**
+ * Queue a zone as part of a group
+ * @param {number} zoneId - Zone ID
+ * @param {object} queueData - Queue data
+ */
+const queueZone = (zoneId, queueData) => {
+  queuedZones.set(zoneId, queueData);
+};
+
+/**
+ * Dequeue a zone
+ * @param {number} zoneId - Zone ID
+ */
+const dequeueZone = (zoneId) => {
+  queuedZones.delete(zoneId);
+};
+
+/**
+ * Check if zone is queued
+ * @param {number} zoneId - Zone ID
+ * @returns {boolean} - True if zone is queued
+ */
+const isZoneQueued = (zoneId) => {
+  return queuedZones.has(zoneId);
+};
+
+/**
+ * Get queued zone data
+ * @param {number} zoneId - Zone ID
+ * @returns {object|null} - Queue data or null
+ */
+const getQueuedZone = (zoneId) => {
+  return queuedZones.get(zoneId) || null;
+};
+
+/**
+ * Get all queued zones
+ * @returns {Array} - Array of queued zones
+ */
+const getAllQueuedZones = () => {
+  const zones = [];
+  for (const [zoneId, data] of queuedZones.entries()) {
+    zones.push({
+      zone_id: parseInt(zoneId),
+      ...data
+    });
+  }
+  return zones;
 };
 
 /**
@@ -208,6 +262,9 @@ const stopZoneManaged = async (zoneId) => {
     // Remove from running zones map
     runningZones.delete(zoneId);
 
+    // Remove from queued zones map (if it was queued)
+    queuedZones.delete(zoneId);
+
     // Get zone name for logging
     const zone = await getOne('SELECT name FROM zones WHERE id = ?', [zoneId]);
 
@@ -275,6 +332,11 @@ module.exports = {
   getRunningZoneCount,
   getRunningZones,
   getZoneState,
+  queueZone,
+  dequeueZone,
+  isZoneQueued,
+  getQueuedZone,
+  getAllQueuedZones,
   startZoneManaged,
   stopZoneManaged,
   stopAllZonesManaged,

@@ -294,4 +294,54 @@ export const getChartData = async (days = 30, metric = 'gallons') => {
   return response.data;
 };
 
+// ========== GROUPS API (v2.1) ==========
+
+/**
+ * Get all zone groups
+ */
+export const getAllGroups = async () => {
+  const response = await apiClient.get('/groups');
+  return response.data;
+};
+
+/**
+ * Get single group by ID
+ */
+export const getGroup = async (groupId) => {
+  const response = await apiClient.get(`/groups/${groupId}`);
+  return response.data;
+};
+
+/**
+ * Create new zone group
+ */
+export const createGroup = async (data) => {
+  const response = await apiClient.post('/groups', data);
+  return response.data;
+};
+
+/**
+ * Update zone group
+ */
+export const updateGroup = async (groupId, data) => {
+  const response = await apiClient.put(`/groups/${groupId}`, data);
+  return response.data;
+};
+
+/**
+ * Delete zone group
+ */
+export const deleteGroup = async (groupId) => {
+  const response = await apiClient.delete(`/groups/${groupId}`);
+  return response.data;
+};
+
+/**
+ * Run a zone group (start all zones in sequence)
+ */
+export const runGroup = async (groupId, duration = null) => {
+  const response = await apiClient.post(`/groups/${groupId}/run`, { duration });
+  return response.data;
+};
+
 export default apiClient;

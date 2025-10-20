@@ -81,9 +81,11 @@ const ZoneCard = ({ zone, onUpdate }) => {
         </div>
 
         {/* Status */}
-        <div className={`mb-4 ${getZoneStatusColor(zone.is_running)}`}>
+        <div className={`mb-4 ${getZoneStatusColor(zone)}`}>
           <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${zone.is_running ? 'bg-success' : 'bg-gray-300'}`}></div>
+            <div className={`w-3 h-3 rounded-full ${
+              zone.is_running ? 'bg-success' : zone.is_queued ? 'bg-warning' : 'bg-gray-300'
+            }`}></div>
             <span className="font-medium">{getZoneStatusText(zone)}</span>
           </div>
         </div>
@@ -103,9 +105,10 @@ const ZoneCard = ({ zone, onUpdate }) => {
             <Button
               variant="success"
               onClick={() => setShowStartModal(true)}
+              disabled={zone.is_queued}
               className="flex-1"
             >
-              Start
+              {zone.is_queued ? 'Queued' : 'Start'}
             </Button>
           )}
         </div>

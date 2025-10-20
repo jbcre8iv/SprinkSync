@@ -5,7 +5,7 @@
  */
 
 const { getAll, getOne, runQuery } = require('../config/database');
-const { startZoneManaged, stopZoneManaged, stopAllZonesManaged, getZoneState } = require('../services/zone-manager');
+const { startZoneManaged, stopZoneManaged, stopAllZonesManaged, getZoneState, getQueuedZone } = require('../services/zone-manager');
 const { validateZoneId, validateDuration, validateZoneName } = require('../utils/validation');
 const { HTTP_STATUS } = require('../config/constants');
 const { getZoneConfig, isValidZoneCount, VALID_ZONE_COUNTS } = require('../config/zoneConfigs');
@@ -17,13 +17,17 @@ const getAllZones = async (req, res, next) => {
   try {
     const zones = await getAll('SELECT * FROM zones ORDER BY id');
 
-    // Add runtime status to each zone
+    // Add runtime status and queue status to each zone
     const zonesWithStatus = zones.map(zone => {
       const state = getZoneState(zone.id);
+      const queueData = getQueuedZone(zone.id);
+
       return {
         ...zone,
         is_running: state.is_running,
-        remaining_time: state.remaining_time
+        remaining_time: state.remaining_time,
+        is_queued: !!queueData,
+        queue_data: queueData
       };
     });
 
@@ -49,13 +53,16 @@ const getZoneById = async (req, res, next) => {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ error: 'Zone not found' });
     }
 
-    // Add runtime status
+    // Add runtime status and queue status
     const state = getZoneState(zone.id);
+    const queueData = getQueuedZone(zone.id);
 
     res.json({
       ...zone,
       is_running: state.is_running,
-      remaining_time: state.remaining_time
+      remaining_time: state.remaining_time,
+      is_queued: !!queueData,
+      queue_data: queueData
     });
 
   } catch (error) {

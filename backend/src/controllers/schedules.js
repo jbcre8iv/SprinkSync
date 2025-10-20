@@ -16,9 +16,16 @@ const { HTTP_STATUS } = require('../config/constants');
 const getAllSchedules = async (req, res, next) => {
   try {
     let query = `
-      SELECT s.*, z.name as zone_name
+      SELECT s.*,
+        z.name as zone_name,
+        g.name as group_name,
+        CASE
+          WHEN s.zone_id IS NOT NULL THEN 'zone'
+          WHEN s.group_id IS NOT NULL THEN 'group'
+        END as schedule_type
       FROM schedules s
-      JOIN zones z ON s.zone_id = z.id
+      LEFT JOIN zones z ON s.zone_id = z.id
+      LEFT JOIN zone_groups g ON s.group_id = g.id
     `;
     const conditions = [];
     const values = [];
@@ -28,6 +35,15 @@ const getAllSchedules = async (req, res, next) => {
       const validation = validateZoneId(req.query.zone_id);
       if (validation.valid) {
         conditions.push('s.zone_id = ?');
+        values.push(validation.value);
+      }
+    }
+
+    // Filter by group_id
+    if (req.query.group_id) {
+      const validation = validateZoneId(req.query.group_id); // Reuse validation
+      if (validation.valid) {
+        conditions.push('s.group_id = ?');
         values.push(validation.value);
       }
     }
@@ -45,11 +61,11 @@ const getAllSchedules = async (req, res, next) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    query += ' ORDER BY s.zone_id, s.start_time';
+    query += ' ORDER BY s.start_time';
 
     const schedules = await getAll(query, values);
 
-    // Add next_run to each schedule
+    // Add next_run and target_name to each schedule
     const schedulesWithNextRun = schedules.map(schedule => {
       const days = JSON.parse(schedule.days);
       const nextRun = schedule.enabled ? getNextScheduledRun(schedule.start_time, days) : null;
@@ -57,7 +73,8 @@ const getAllSchedules = async (req, res, next) => {
       return {
         ...schedule,
         days: days, // Convert from JSON string to array
-        next_run: nextRun ? nextRun.toISOString() : null
+        next_run: nextRun ? nextRun.toISOString() : null,
+        target_name: schedule.zone_name || schedule.group_name
       };
     });
 
@@ -78,9 +95,16 @@ const getScheduleById = async (req, res, next) => {
     }
 
     const schedule = await getOne(
-      `SELECT s.*, z.name as zone_name
+      `SELECT s.*,
+        z.name as zone_name,
+        g.name as group_name,
+        CASE
+          WHEN s.zone_id IS NOT NULL THEN 'zone'
+          WHEN s.group_id IS NOT NULL THEN 'group'
+        END as schedule_type
        FROM schedules s
-       JOIN zones z ON s.zone_id = z.id
+       LEFT JOIN zones z ON s.zone_id = z.id
+       LEFT JOIN zone_groups g ON s.group_id = g.id
        WHERE s.id = ?`,
       [validation.value]
     );
@@ -96,7 +120,8 @@ const getScheduleById = async (req, res, next) => {
     res.json({
       ...schedule,
       days: days,
-      next_run: nextRun ? nextRun.toISOString() : null
+      next_run: nextRun ? nextRun.toISOString() : null,
+      target_name: schedule.zone_name || schedule.group_name
     });
 
   } catch (error) {
@@ -109,18 +134,43 @@ const getScheduleById = async (req, res, next) => {
  */
 const createSchedule = async (req, res, next) => {
   try {
-    const { zone_id, start_time, duration, days, enabled } = req.body;
+    const { zone_id, group_id, start_time, duration, days, enabled } = req.body;
 
-    // Validate zone_id
-    const zoneValidation = validateZoneId(zone_id);
-    if (!zoneValidation.valid) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: zoneValidation.error });
+    // Validate that exactly one of zone_id or group_id is provided
+    if (!zone_id && !group_id) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: 'Either zone_id or group_id is required' });
+    }
+    if (zone_id && group_id) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: 'Cannot schedule both a zone and a group' });
     }
 
-    // Check zone exists
-    const zone = await getOne('SELECT * FROM zones WHERE id = ?', [zoneValidation.value]);
-    if (!zone) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ error: 'Zone not found' });
+    let targetValidation;
+    let targetExists;
+
+    if (zone_id) {
+      // Validate zone_id
+      targetValidation = validateZoneId(zone_id);
+      if (!targetValidation.valid) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: targetValidation.error });
+      }
+
+      // Check zone exists
+      targetExists = await getOne('SELECT * FROM zones WHERE id = ?', [targetValidation.value]);
+      if (!targetExists) {
+        return res.status(HTTP_STATUS.NOT_FOUND).json({ error: 'Zone not found' });
+      }
+    } else {
+      // Validate group_id
+      targetValidation = validateZoneId(group_id); // Reuse validation
+      if (!targetValidation.valid) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: targetValidation.error });
+      }
+
+      // Check group exists
+      targetExists = await getOne('SELECT * FROM zone_groups WHERE id = ?', [targetValidation.value]);
+      if (!targetExists) {
+        return res.status(HTTP_STATUS.NOT_FOUND).json({ error: 'Group not found' });
+      }
     }
 
     // Validate start_time
@@ -146,16 +196,30 @@ const createSchedule = async (req, res, next) => {
 
     // Insert schedule
     const result = await runQuery(
-      `INSERT INTO schedules (zone_id, start_time, duration, days, enabled)
-       VALUES (?, ?, ?, ?, ?)`,
-      [zoneValidation.value, timeValidation.value, durationValidation.value, JSON.stringify(daysValidation.value), enabledValue]
+      `INSERT INTO schedules (zone_id, group_id, start_time, duration, days, enabled)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        zone_id ? targetValidation.value : null,
+        group_id ? targetValidation.value : null,
+        timeValidation.value,
+        durationValidation.value,
+        JSON.stringify(daysValidation.value),
+        enabledValue
+      ]
     );
 
     // Get created schedule
     const newSchedule = await getOne(
-      `SELECT s.*, z.name as zone_name
+      `SELECT s.*,
+        z.name as zone_name,
+        g.name as group_name,
+        CASE
+          WHEN s.zone_id IS NOT NULL THEN 'zone'
+          WHEN s.group_id IS NOT NULL THEN 'group'
+        END as schedule_type
        FROM schedules s
-       JOIN zones z ON s.zone_id = z.id
+       LEFT JOIN zones z ON s.zone_id = z.id
+       LEFT JOIN zone_groups g ON s.group_id = g.id
        WHERE s.id = ?`,
       [result.lastID]
     );
@@ -174,7 +238,8 @@ const createSchedule = async (req, res, next) => {
     res.status(HTTP_STATUS.CREATED).json({
       ...newSchedule,
       days: daysValidation.value,
-      next_run: nextRun ? nextRun.toISOString() : null
+      next_run: nextRun ? nextRun.toISOString() : null,
+      target_name: newSchedule.zone_name || newSchedule.group_name
     });
 
   } catch (error) {
@@ -262,9 +327,16 @@ const updateSchedule = async (req, res, next) => {
 
     // Get updated schedule
     const updatedSchedule = await getOne(
-      `SELECT s.*, z.name as zone_name
+      `SELECT s.*,
+        z.name as zone_name,
+        g.name as group_name,
+        CASE
+          WHEN s.zone_id IS NOT NULL THEN 'zone'
+          WHEN s.group_id IS NOT NULL THEN 'group'
+        END as schedule_type
        FROM schedules s
-       JOIN zones z ON s.zone_id = z.id
+       LEFT JOIN zones z ON s.zone_id = z.id
+       LEFT JOIN zone_groups g ON s.group_id = g.id
        WHERE s.id = ?`,
       [scheduleId]
     );
@@ -275,7 +347,8 @@ const updateSchedule = async (req, res, next) => {
     res.json({
       ...updatedSchedule,
       days: days,
-      next_run: nextRun ? nextRun.toISOString() : null
+      next_run: nextRun ? nextRun.toISOString() : null,
+      target_name: updatedSchedule.zone_name || updatedSchedule.group_name
     });
 
   } catch (error) {

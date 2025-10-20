@@ -67,14 +67,17 @@ const initializeDatabase = () => {
       db.run(`
         CREATE TABLE IF NOT EXISTS schedules (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          zone_id INTEGER NOT NULL,
+          zone_id INTEGER,
+          group_id INTEGER,
           start_time TEXT NOT NULL,
           duration INTEGER NOT NULL,
           days TEXT NOT NULL,
           enabled INTEGER NOT NULL DEFAULT 1,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (zone_id) REFERENCES zones(id) ON DELETE CASCADE
+          FOREIGN KEY (zone_id) REFERENCES zones(id) ON DELETE CASCADE,
+          FOREIGN KEY (group_id) REFERENCES zone_groups(id) ON DELETE CASCADE,
+          CHECK ((zone_id IS NOT NULL AND group_id IS NULL) OR (zone_id IS NULL AND group_id IS NOT NULL))
         )
       `, (err) => {
         if (err) {
@@ -87,6 +90,9 @@ const initializeDatabase = () => {
       // Create indexes for schedules
       db.run(`
         CREATE INDEX IF NOT EXISTS idx_schedules_zone_id ON schedules(zone_id)
+      `);
+      db.run(`
+        CREATE INDEX IF NOT EXISTS idx_schedules_group_id ON schedules(group_id)
       `);
       db.run(`
         CREATE INDEX IF NOT EXISTS idx_schedules_enabled ON schedules(enabled)
@@ -231,6 +237,55 @@ const initializeDatabase = () => {
       `);
       db.run(`
         CREATE INDEX IF NOT EXISTS idx_analytics_zone_id ON analytics(zone_id)
+      `);
+
+      // Create zone_groups table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS zone_groups (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          description TEXT,
+          default_duration INTEGER NOT NULL DEFAULT 15,
+          color TEXT DEFAULT '#3B82F6',
+          icon TEXT DEFAULT '🌱',
+          custom_image TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating zone_groups table:', err.message);
+          return reject(err);
+        }
+        console.log('✅ Zone groups table ready');
+      });
+
+      // Create zone_group_members table (join table)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS zone_group_members (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_id INTEGER NOT NULL,
+          zone_id INTEGER NOT NULL,
+          sequence_order INTEGER NOT NULL DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (group_id) REFERENCES zone_groups(id) ON DELETE CASCADE,
+          FOREIGN KEY (zone_id) REFERENCES zones(id) ON DELETE CASCADE,
+          UNIQUE(group_id, zone_id)
+        )
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating zone_group_members table:', err.message);
+          return reject(err);
+        }
+        console.log('✅ Zone group members table ready');
+      });
+
+      // Create indexes for zone groups
+      db.run(`
+        CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON zone_group_members(group_id)
+      `);
+      db.run(`
+        CREATE INDEX IF NOT EXISTS idx_group_members_zone_id ON zone_group_members(zone_id)
       `);
 
       // Insert default system settings if not exists

@@ -17,28 +17,85 @@ const logger = require('./logger');
 const activeCronJobs = new Map();
 
 /**
- * Execute a schedule (start the associated zone)
+ * Execute a schedule (start the associated zone or group)
  * @param {object} schedule - Schedule object from database
  */
 const executeSchedule = async (schedule) => {
   try {
-    logger.scheduleExecution(schedule.id, schedule.zone_id, schedule.zone_name);
+    // Handle zone schedule
+    if (schedule.zone_id) {
+      logger.scheduleExecution(schedule.id, schedule.zone_id, schedule.zone_name);
 
-    // Check if zone is already running
-    if (isZoneRunning(schedule.zone_id)) {
-      logger.warn(`Schedule ${schedule.id}: Zone ${schedule.zone_id} already running, skipping`);
-      return;
+      // Check if zone is already running
+      if (isZoneRunning(schedule.zone_id)) {
+        logger.warn(`Schedule ${schedule.id}: Zone ${schedule.zone_id} already running, skipping`);
+        return;
+      }
+
+      // Start the zone
+      await startZoneManaged(
+        schedule.zone_id,
+        schedule.duration,
+        TRIGGER_TYPES.SCHEDULED,
+        schedule.id
+      );
+
+      logger.info(`Schedule ${schedule.id} executed successfully`);
     }
+    // Handle group schedule
+    else if (schedule.group_id) {
+      logger.info(`Schedule ${schedule.id}: Starting group ${schedule.group_name}`);
 
-    // Start the zone
-    await startZoneManaged(
-      schedule.zone_id,
-      schedule.duration,
-      TRIGGER_TYPES.SCHEDULED,
-      schedule.id
-    );
+      // Get zones in the group
+      const members = await getAll(
+        `SELECT z.id, z.name
+         FROM zone_group_members zgm
+         JOIN zones z ON zgm.zone_id = z.id
+         WHERE zgm.group_id = ?
+         ORDER BY zgm.sequence_order`,
+        [schedule.group_id]
+      );
 
-    logger.info(`Schedule ${schedule.id} executed successfully`);
+      if (members.length === 0) {
+        logger.warn(`Schedule ${schedule.id}: Group ${schedule.group_id} has no zones, skipping`);
+        return;
+      }
+
+      // Check if any zones in the group are already running
+      const runningZones = members.filter(z => isZoneRunning(z.id));
+      if (runningZones.length > 0) {
+        logger.warn(`Schedule ${schedule.id}: Zone ${runningZones[0].name} in group is already running, skipping`);
+        return;
+      }
+
+      logger.info(`Schedule ${schedule.id}: Starting ${members.length} zones from group ${schedule.group_name}`);
+
+      // Start first zone immediately
+      await startZoneManaged(
+        members[0].id,
+        schedule.duration,
+        TRIGGER_TYPES.SCHEDULED,
+        schedule.id
+      );
+      logger.info(`Schedule ${schedule.id}: Started zone ${members[0].name} (1/${members.length})`);
+
+      // Queue remaining zones with delays
+      for (let i = 1; i < members.length; i++) {
+        const zone = members[i];
+        const delayMs = (schedule.duration * 60 * 1000) * i + (5000 * i); // duration + 5sec buffer per zone
+
+        setTimeout(async () => {
+          try {
+            await startZoneManaged(zone.id, schedule.duration, TRIGGER_TYPES.SCHEDULED, schedule.id);
+            logger.info(`Schedule ${schedule.id}: Started zone ${zone.name} (${i + 1}/${members.length})`);
+          } catch (error) {
+            logger.error(`Schedule ${schedule.id}: Failed to start zone ${zone.name}`, error);
+          }
+        }, delayMs);
+      }
+
+      logger.info(`Schedule ${schedule.id} executed successfully - ${members.length} zones queued`);
+    }
 
   } catch (error) {
     logger.error(`Failed to execute schedule ${schedule.id}`, error);
@@ -73,7 +130,10 @@ const addScheduleToCron = (schedule) => {
     // Store job reference
     activeCronJobs.set(schedule.id, job);
 
-    logger.info(`Schedule ${schedule.id} added: Zone ${schedule.zone_id} at ${schedule.start_time} on ${days.join(',')}`);
+    const target = schedule.zone_id
+      ? `Zone ${schedule.zone_id} (${schedule.zone_name})`
+      : `Group ${schedule.group_id} (${schedule.group_name})`;
+    logger.info(`Schedule ${schedule.id} added: ${target} at ${schedule.start_time} on ${days.join(',')}`);
 
   } catch (error) {
     logger.error(`Failed to add schedule ${schedule.id} to cron`, error);
@@ -104,9 +164,12 @@ const updateScheduleInCron = async (scheduleId) => {
 
     // Get updated schedule
     const schedule = await getOne(
-      `SELECT s.*, z.name as zone_name
+      `SELECT s.*,
+        z.name as zone_name,
+        g.name as group_name
        FROM schedules s
-       JOIN zones z ON s.zone_id = z.id
+       LEFT JOIN zones z ON s.zone_id = z.id
+       LEFT JOIN zone_groups g ON s.group_id = g.id
        WHERE s.id = ? AND s.enabled = 1`,
       [scheduleId]
     );
@@ -130,9 +193,12 @@ const loadSchedules = async () => {
 
     // Get all enabled schedules
     const schedules = await getAll(
-      `SELECT s.*, z.name as zone_name
+      `SELECT s.*,
+        z.name as zone_name,
+        g.name as group_name
        FROM schedules s
-       JOIN zones z ON s.zone_id = z.id
+       LEFT JOIN zones z ON s.zone_id = z.id
+       LEFT JOIN zone_groups g ON s.group_id = g.id
        WHERE s.enabled = 1`
     );
 

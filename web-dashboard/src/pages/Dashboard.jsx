@@ -6,21 +6,28 @@
 
 import { useState, useEffect } from 'react';
 import ZoneCard from '../components/ZoneCard';
+import GroupCard from '../components/GroupCard';
 import Button from '../components/Button';
 import LoadingSpinner from '../components/LoadingSpinner';
 import WeatherWidget from '../components/WeatherWidget';
 import AnalyticsWidget from '../components/AnalyticsWidget';
 import InsightsPanel from '../components/InsightsPanel';
 import SystemConfigModal from '../components/SystemConfigModal';
-import { getAllZones, stopAllZones, getSettings, initializeSystem, resetSystem } from '../api/client';
+import CreateGroupModal from '../components/CreateGroupModal';
+import EditGroupModal from '../components/EditGroupModal';
+import { getAllZones, stopAllZones, getSettings, initializeSystem, resetSystem, getAllGroups } from '../api/client';
 import { usePolling } from '../hooks/usePolling';
 
 const Dashboard = () => {
   const [zones, setZones] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [settings, setSettings] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isStoppingAll, setIsStoppingAll] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [showEditGroupModal, setShowEditGroupModal] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState(null);
 
   // Fetch settings data
   const fetchSettings = async () => {
@@ -44,8 +51,21 @@ const Dashboard = () => {
     }
   };
 
+  // Fetch groups data
+  const fetchGroups = async () => {
+    try {
+      const data = await getAllGroups();
+      setGroups(data.groups || []);
+    } catch (error) {
+      console.error('Failed to fetch groups:', error);
+    }
+  };
+
   // Auto-refresh zones every 5 seconds
   usePolling(fetchZones, 5000);
+
+  // Auto-refresh groups every 10 seconds
+  usePolling(fetchGroups, 10000);
 
   // Auto-refresh settings every 30 seconds (to pick up changes from Settings page)
   usePolling(fetchSettings, 30000);
@@ -83,6 +103,12 @@ const Dashboard = () => {
     } catch (error) {
       alert(`Failed to reset system: ${error.response?.data?.error || error.message}`);
     }
+  };
+
+  // Handle edit group
+  const handleEditGroup = (group) => {
+    setSelectedGroup(group);
+    setShowEditGroupModal(true);
   };
 
   const runningZones = zones.filter(z => z.is_running);
@@ -147,6 +173,64 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Zone Groups Section */}
+      {zones.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Zone Groups
+              {groups.length > 0 && (
+                <span className="ml-2 text-sm font-normal text-gray-500">
+                  ({groups.length})
+                </span>
+              )}
+            </h2>
+            <Button
+              onClick={() => setShowCreateGroupModal(true)}
+              className="flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Group
+            </Button>
+          </div>
+
+          {groups.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {groups.map((group) => (
+                <GroupCard
+                  key={group.id}
+                  group={group}
+                  zones={zones}
+                  onEdit={handleEditGroup}
+                  onUpdate={() => {
+                    fetchGroups();
+                    fetchZones();
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
+              <svg className="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-1">No groups yet</h3>
+              <p className="text-gray-600 text-sm mb-4">
+                Create groups to run multiple zones in sequence
+              </p>
+              <Button
+                onClick={() => setShowCreateGroupModal(true)}
+                size="sm"
+              >
+                Create Your First Group
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Zone Grid */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-4">
@@ -198,6 +282,32 @@ const Dashboard = () => {
         isOpen={showConfigModal}
         onClose={() => setShowConfigModal(false)}
         onSubmit={handleInitializeSystem}
+      />
+
+      {/* Create Group Modal */}
+      <CreateGroupModal
+        isOpen={showCreateGroupModal}
+        onClose={() => setShowCreateGroupModal(false)}
+        zones={zones}
+        onGroupCreated={() => {
+          fetchGroups();
+          fetchZones();
+        }}
+      />
+
+      {/* Edit Group Modal */}
+      <EditGroupModal
+        isOpen={showEditGroupModal}
+        onClose={() => {
+          setShowEditGroupModal(false);
+          setSelectedGroup(null);
+        }}
+        group={selectedGroup}
+        zones={zones}
+        onGroupUpdated={() => {
+          fetchGroups();
+          fetchZones();
+        }}
       />
     </div>
   );

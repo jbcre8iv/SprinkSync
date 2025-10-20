@@ -109,8 +109,10 @@ export const formatTime12Hour = (time) => {
 /**
  * Get zone status color class
  */
-export const getZoneStatusColor = (isRunning) => {
-  return isRunning ? 'text-success' : 'text-gray-400';
+export const getZoneStatusColor = (zone) => {
+  if (zone.is_running) return 'text-success';
+  if (zone.is_queued) return 'text-warning';
+  return 'text-gray-400';
 };
 
 /**
@@ -119,6 +121,10 @@ export const getZoneStatusColor = (isRunning) => {
 export const getZoneStatusText = (zone) => {
   if (zone.is_running) {
     return `Running - ${zone.remaining_time} min left`;
+  }
+  if (zone.is_queued && zone.queue_data) {
+    const { groupName, position, totalInGroup } = zone.queue_data;
+    return `Queued in ${groupName} (#${position} of ${totalInGroup})`;
   }
   return 'Idle';
 };
