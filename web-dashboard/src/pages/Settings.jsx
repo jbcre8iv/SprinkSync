@@ -13,6 +13,9 @@ import {
   updateSettings,
   getUseCaseProfiles,
   getProfileDetails,
+  getManufacturers,
+  getManufacturerDetails,
+  getControllersByManufacturer,
   getControllerModels,
   getControllerDetails,
   getDevModeStatus,
@@ -25,7 +28,10 @@ const Settings = () => {
   const [settings, setSettings] = useState(null);
   const [profiles, setProfiles] = useState([]);
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [manufacturers, setManufacturers] = useState([]);
+  const [selectedManufacturer, setSelectedManufacturer] = useState(null);
   const [controllers, setControllers] = useState([]);
+  const [filteredControllers, setFilteredControllers] = useState([]);
   const [selectedController, setSelectedController] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -36,6 +42,7 @@ const Settings = () => {
 
   // Form state
   const [useCaseProfile, setUseCaseProfile] = useState('');
+  const [manufacturer, setManufacturer] = useState('');
   const [controllerModel, setControllerModel] = useState('');
   const [locationLat, setLocationLat] = useState('');
   const [locationLon, setLocationLon] = useState('');
@@ -54,10 +61,11 @@ const Settings = () => {
 
   const fetchData = async () => {
     try {
-      const [statusData, settingsData, profilesData, controllersData, devModeData] = await Promise.all([
+      const [statusData, settingsData, profilesData, manufacturersData, controllersData, devModeData] = await Promise.all([
         getSystemStatus(),
         getSettings(),
         getUseCaseProfiles(),
+        getManufacturers(),
         getControllerModels(),
         getDevModeStatus()
       ]);
@@ -65,6 +73,7 @@ const Settings = () => {
       setStatus(statusData);
       setSettings(settingsData.settings);
       setProfiles(profilesData.profiles);
+      setManufacturers(manufacturersData.manufacturers);
       setControllers(controllersData.controllers);
       setDevMode(devModeData.dev_mode || false);
 
@@ -89,10 +98,24 @@ const Settings = () => {
         setSelectedProfile(profileData.profile);
       }
 
-      // Load controller details
+      // Load controller details and determine manufacturer
       if (s.controllerModel) {
         const controllerData = await getControllerDetails(s.controllerModel);
         setSelectedController(controllerData.controller);
+
+        // Set the manufacturer based on the controller
+        const mfr = controllerData.controller.manufacturer;
+        setManufacturer(mfr);
+
+        // Load manufacturer details
+        if (mfr) {
+          const manufacturerData = await getManufacturerDetails(mfr);
+          setSelectedManufacturer(manufacturerData.manufacturer);
+
+          // Filter controllers by manufacturer
+          const mfrControllers = await getControllersByManufacturer(mfr);
+          setFilteredControllers(mfrControllers.controllers);
+        }
       }
 
       setIsLoading(false);
@@ -110,6 +133,23 @@ const Settings = () => {
       setSelectedProfile(profileData.profile);
     } catch (error) {
       console.error('Failed to fetch profile details:', error);
+    }
+  };
+
+  const handleManufacturerChange = async (manufacturerId) => {
+    setManufacturer(manufacturerId);
+    setControllerModel(''); // Reset controller selection
+    setSelectedController(null);
+    setHasUnsavedChanges(true);
+    try {
+      const manufacturerData = await getManufacturerDetails(manufacturerId);
+      setSelectedManufacturer(manufacturerData.manufacturer);
+
+      // Load controllers for this manufacturer
+      const controllersData = await getControllersByManufacturer(manufacturerId);
+      setFilteredControllers(controllersData.controllers);
+    } catch (error) {
+      console.error('Failed to fetch manufacturer details:', error);
     }
   };
 
@@ -290,26 +330,55 @@ const Settings = () => {
           <div className="card">
             <h2 className="text-lg font-semibold mb-4">Controller Model</h2>
             <div className="space-y-4">
+              {/* Step 1: Select Manufacturer */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Rain Bird Controller
+                  1. Select Manufacturer
                 </label>
                 <select
-                  value={controllerModel}
-                  onChange={(e) => handleControllerChange(e.target.value)}
+                  value={manufacturer}
+                  onChange={(e) => handleManufacturerChange(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  {controllers.map((controller) => (
-                    <option key={controller.id} value={controller.id}>
-                      {controller.name} ({controller.maxZones} zones)
+                  <option value="">-- Choose a brand --</option>
+                  {manufacturers.map((mfr) => (
+                    <option key={mfr.id} value={mfr.id}>
+                      {mfr.name}
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Zones will be automatically configured to match your controller when you save
-                </p>
+                {selectedManufacturer && (
+                  <p className="text-xs text-gray-600 mt-1">
+                    {selectedManufacturer.description}
+                  </p>
+                )}
               </div>
 
+              {/* Step 2: Select Controller Model */}
+              {manufacturer && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    2. Select Controller Model
+                  </label>
+                  <select
+                    value={controllerModel}
+                    onChange={(e) => handleControllerChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">-- Choose a model --</option>
+                    {filteredControllers.map((controller) => (
+                      <option key={controller.id} value={controller.id}>
+                        {controller.name} ({controller.maxZones} zones)
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Zones will be automatically configured to match your controller when you save
+                  </p>
+                </div>
+              )}
+
+              {/* Controller Details */}
               {selectedController && (
                 <div className="bg-gray-50 p-4 rounded-md">
                   <div className="mb-2">

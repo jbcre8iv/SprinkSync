@@ -6,7 +6,8 @@
 
 const { getOne, runQuery, getAll } = require('../config/database');
 const { getProfileOptions, getProfile } = require('../config/useCaseProfiles');
-const { getAllControllers, getControllerConfig } = require('../config/rainBirdControllers');
+const { getAllControllers, getControllerConfig, getControllersByManufacturer } = require('../config/controllers');
+const { getAllManufacturers, getManufacturer } = require('../config/manufacturers');
 const { getZoneConfig, isValidZoneCount } = require('../config/zoneConfigs');
 const { initializeGPIO } = require('../hardware/gpio');
 const logger = require('../services/logger');
@@ -424,6 +425,113 @@ const getControllerDetails = async (req, res) => {
   }
 };
 
+/**
+ * Get all manufacturers
+ * GET /api/settings/manufacturers
+ */
+const getManufacturers = async (req, res) => {
+  try {
+    const manufacturers = getAllManufacturers();
+
+    res.json({
+      success: true,
+      manufacturers: manufacturers.map(mfr => ({
+        id: mfr.id,
+        name: mfr.name,
+        description: mfr.description,
+        marketPosition: mfr.market_position,
+        specialties: mfr.specialties,
+        popularSeries: mfr.popular_series,
+        featuresKnownFor: mfr.features_known_for,
+      }))
+    });
+  } catch (error) {
+    logger.error('Error getting manufacturers:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get manufacturers'
+    });
+  }
+};
+
+/**
+ * Get specific manufacturer details
+ * GET /api/settings/manufacturers/:manufacturerId
+ */
+const getManufacturerDetails = async (req, res) => {
+  try {
+    const { manufacturerId } = req.params;
+    const manufacturer = getManufacturer(manufacturerId);
+
+    if (!manufacturer) {
+      return res.status(404).json({
+        success: false,
+        error: 'Manufacturer not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      manufacturer: {
+        id: manufacturer.id,
+        name: manufacturer.name,
+        description: manufacturer.description,
+        founded: manufacturer.founded,
+        headquarters: manufacturer.headquarters,
+        marketPosition: manufacturer.market_position,
+        specialties: manufacturer.specialties,
+        website: manufacturer.website,
+        popularSeries: manufacturer.popular_series,
+        featuresKnownFor: manufacturer.features_known_for,
+      }
+    });
+  } catch (error) {
+    logger.error('Error getting manufacturer details:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get manufacturer details'
+    });
+  }
+};
+
+/**
+ * Get controllers by manufacturer
+ * GET /api/settings/manufacturers/:manufacturerId/controllers
+ */
+const getControllersByMfr = async (req, res) => {
+  try {
+    const { manufacturerId } = req.params;
+    const controllers = getControllersByManufacturer(manufacturerId);
+
+    if (!controllers || controllers.length === 0) {
+      return res.json({
+        success: true,
+        controllers: [],
+        message: 'No controllers found for this manufacturer'
+      });
+    }
+
+    res.json({
+      success: true,
+      controllers: controllers.map(ctrl => ({
+        id: ctrl.id,
+        name: ctrl.name,
+        manufacturer: ctrl.manufacturer,
+        description: ctrl.description,
+        maxZones: ctrl.max_zones,
+        expandableTo: ctrl.expandable_to,
+        maxConcurrentZones: ctrl.max_concurrent_zones,
+      }))
+    });
+  } catch (error) {
+    logger.error('Error getting controllers by manufacturer:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get controllers'
+    });
+  }
+};
+
 module.exports = {
   getSettings,
   updateSettings,
@@ -431,4 +539,7 @@ module.exports = {
   getProfileDetails,
   getControllerModels,
   getControllerDetails,
+  getManufacturers,
+  getManufacturerDetails,
+  getControllersByMfr,
 };

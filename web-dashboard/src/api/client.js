@@ -233,7 +233,31 @@ export const getProfileDetails = async (profileId) => {
 };
 
 /**
- * Get all Rain Bird controller models
+ * Get all manufacturers
+ */
+export const getManufacturers = async () => {
+  const response = await apiClient.get('/settings/manufacturers');
+  return response.data;
+};
+
+/**
+ * Get specific manufacturer details
+ */
+export const getManufacturerDetails = async (manufacturerId) => {
+  const response = await apiClient.get(`/settings/manufacturers/${manufacturerId}`);
+  return response.data;
+};
+
+/**
+ * Get controllers by manufacturer
+ */
+export const getControllersByManufacturer = async (manufacturerId) => {
+  const response = await apiClient.get(`/settings/manufacturers/${manufacturerId}/controllers`);
+  return response.data;
+};
+
+/**
+ * Get all controller models
  */
 export const getControllerModels = async () => {
   const response = await apiClient.get('/settings/controllers');
