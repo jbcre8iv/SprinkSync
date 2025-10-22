@@ -370,8 +370,11 @@ const getControllerModels = async (req, res) => {
         manufacturer: ctrl.manufacturer,
         description: ctrl.description,
         maxZones: ctrl.max_zones,
+        zoneCount: ctrl.max_zones,  // Alias for mobile app compatibility
         expandableTo: ctrl.expandable_to,
         maxConcurrentZones: ctrl.max_concurrent_zones,
+        type: ctrl.features?.includes('wifi') ? 'WiFi' : ctrl.features?.includes('bluetooth') ? 'Bluetooth' : 'Wired',
+        features: ctrl.features,
       }))
     });
   } catch (error) {
@@ -407,8 +410,10 @@ const getControllerDetails = async (req, res) => {
         manufacturer: controller.manufacturer,
         description: controller.description,
         maxZones: controller.max_zones,
+        zoneCount: controller.max_zones,  // Alias for mobile app compatibility
         expandableTo: controller.expandable_to,
         maxConcurrentZones: controller.max_concurrent_zones,
+        type: controller.features?.includes('wifi') ? 'WiFi' : controller.features?.includes('bluetooth') ? 'Bluetooth' : 'Wired',
         features: controller.features,
         recommendedFor: controller.recommended_for,
         supportsMasterValve: controller.supports_master_valve,
@@ -519,8 +524,11 @@ const getControllersByMfr = async (req, res) => {
         manufacturer: ctrl.manufacturer,
         description: ctrl.description,
         maxZones: ctrl.max_zones,
+        zoneCount: ctrl.max_zones,  // Alias for mobile app compatibility
         expandableTo: ctrl.expandable_to,
         maxConcurrentZones: ctrl.max_concurrent_zones,
+        type: ctrl.features?.includes('wifi') ? 'WiFi' : ctrl.features?.includes('bluetooth') ? 'Bluetooth' : 'Wired',
+        features: ctrl.features,
       }))
     });
   } catch (error) {

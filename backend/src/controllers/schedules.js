@@ -67,7 +67,13 @@ const getAllSchedules = async (req, res, next) => {
 
     // Add next_run and target_name to each schedule
     const schedulesWithNextRun = schedules.map(schedule => {
-      const days = JSON.parse(schedule.days);
+      let days;
+      try {
+        days = JSON.parse(schedule.days);
+      } catch (error) {
+        console.error(`Invalid JSON in schedule ${schedule.id} days field: ${schedule.days}`);
+        days = []; // Default to empty array if JSON is corrupt
+      }
       const nextRun = schedule.enabled ? getNextScheduledRun(schedule.start_time, days) : null;
 
       return {
@@ -114,7 +120,13 @@ const getScheduleById = async (req, res, next) => {
     }
 
     // Parse days and calculate next run
-    const days = JSON.parse(schedule.days);
+    let days;
+    try {
+      days = JSON.parse(schedule.days);
+    } catch (error) {
+      console.error(`Invalid JSON in schedule ${schedule.id} days field: ${schedule.days}`);
+      days = []; // Default to empty array if JSON is corrupt
+    }
     const nextRun = schedule.enabled ? getNextScheduledRun(schedule.start_time, days) : null;
 
     res.json({
